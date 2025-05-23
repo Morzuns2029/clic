@@ -10,6 +10,7 @@ hwidFile := "activated_hwid.txt"
 settingsFile := "settings.ini"
 clickerScriptFile := "clicker.ahk"
 clickerScriptURL := "https://raw.githubusercontent.com/Morzuns2029/clic/main/privatscript.ahk"
+validKeysURL := "https://raw.githubusercontent.com/Morzuns2029/clic/main/valid_keys.txt"
 
 global isRunning := false
 global isPaused := false
@@ -28,12 +29,7 @@ JoinLines(arr) {
 
 ShowAdminPanel() {
     panel := Gui("+AlwaysOnTop", "Панель пользователя")
-
-    activated := false
-    if FileExist(hwidFile) {
-        if InStr(FileRead(hwidFile), thisHWID)
-            activated := true
-    }
+    activated := FileExist(hwidFile) && InStr(FileRead(hwidFile), thisHWID)
 
     panel.AddText(, "Добро пожаловать!")
 
@@ -51,6 +47,7 @@ ShowAdminPanel() {
 }
 
 ActivateKey(key, panel) {
+    global hwidFile, thisHWID, validKeysURL
     key := Trim(key)
     if key = "" {
         MsgBox "Введите ключ!"
@@ -59,28 +56,26 @@ ActivateKey(key, panel) {
 
     try {
         http := ComObject("WinHttp.WinHttpRequest.5.1")
-        http.Open("GET", "https://raw.githubusercontent.com/Morzuns2029/clic/main/valid_keys.txt", false)
+        http.Open("GET", validKeysURL, false)
         http.Send()
         if (http.Status != 200) {
             MsgBox "❌ Ошибка загрузки ключей! Код: " http.Status
             return
         }
-        keyList := http.ResponseText
+        keysText := http.ResponseText
     } catch {
-        MsgBox "❌ Не удалось загрузить ключи."
+        MsgBox "❌ Ошибка загрузки файла с ключами!"
         return
     }
 
-    validLines := StrSplit(keyList, "`n")
-    updatedLines := []
+    validLines := StrSplit(keysText, "`n")
     found := false
+
     for line in validLines {
         parts := StrSplit(Trim(line), "|")
         if parts.Length = 2 && Trim(parts[0]) = key && Trim(parts[1]) = "unused" {
             found := true
-            updatedLines.Push(parts[0] "|" thisHWID)
-        } else {
-            updatedLines.Push(Trim(line))
+            break
         }
     }
 
@@ -90,8 +85,7 @@ ActivateKey(key, panel) {
     }
 
     FileAppend(thisHWID "`n", hwidFile)
-
-    MsgBox "✅ Ключ активирован."
+    MsgBox "✅ Ключ активирован!"
     panel.Destroy()
     ShowAdminPanel()
 }
@@ -110,10 +104,6 @@ LaunchScript(panel) {
             file := FileOpen(clickerScriptFile, "w")
             file.Write(http.ResponseText)
             file.Close()
-            if !FileExist(clickerScriptFile) {
-                MsgBox "❌ Ошибка: файл не создан."
-                return
-            }
         } catch {
             MsgBox "❌ Не удалось скачать файл: " clickerScriptURL
             return
@@ -122,11 +112,12 @@ LaunchScript(panel) {
         Run clickerScriptFile
         ExitApp
     } else {
-        MsgBox "🔐 Скрипт не активирован. Введите ключ для запуска."
+        MsgBox "🔐 Скрипт не активирован. Введите ключ."
     }
 }
 
 ResetHWID() {
+    global hwidFile, thisHWID
     if !FileExist(hwidFile) {
         MsgBox "Файл HWID не найден."
         return
@@ -162,6 +153,7 @@ ShowSettingsPanel() {
 }
 
 LoadSettings() {
+    global workKey, exitKey
     if FileExist(settingsFile) {
         workKey := IniRead(settingsFile, "Keys", "Work", workKey)
         exitKey := IniRead(settingsFile, "Keys", "Exit", exitKey)
@@ -172,8 +164,7 @@ GetHWID() {
     RunWait("cmd /c wmic csproduct get uuid > hwid.tmp", , "Hide")
     hwid := Trim(FileRead("hwid.tmp"))
     FileDelete("hwid.tmp")
-    hwid := StrReplace(hwid, "UUID", "")
-    return Trim(hwid)
+    return Trim(StrReplace(hwid, "UUID", ""))
 }
 
 LoadSettings()
