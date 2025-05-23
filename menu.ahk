@@ -1,4 +1,4 @@
-﻿; GTA5RP Majestic Clicker with One-Time License Activation, HWID Lock, and ...
+; === GTA5RP Majestic Clicker with One-Time License Activation, HWID Lock, and Admin Panel ===
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 
