@@ -8,11 +8,11 @@ exitKey := "Esc"
 clickIntervalMin := 8
 clickIntervalMax := 15
 workDuration := 18000 ; 18 секунд
-keysFile := "valid_keys.txt"
 hwidFile := "activated_hwid.txt"
 settingsFile := "settings.ini"
 clickerScriptFile := "clicker.ahk"
 clickerScriptURL := "https://raw.githubusercontent.com/Morzuns2029/clic/main/privatscript.ahk"
+validKeysURL := "https://raw.githubusercontent.com/Morzuns2029/clic/main/valid_keys.txt"
 
 ; === Глобальные переменные ===
 global isRunning := false
@@ -23,7 +23,7 @@ global remainingTime := workDuration
 global timerStartTime := 0
 global thisHWID := GetHWID()
 
-; === Функция Join строк (замена StrJoin) ===
+; === Функция Join строк ===
 JoinLines(arr) {
     result := ""
     for item in arr
@@ -62,7 +62,6 @@ LaunchScript(panel) {
     if FileExist(hwidFile) && InStr(FileRead(hwidFile), thisHWID) {
         panel.Destroy()
 
-        ; Загружаем новую версию каждый раз
         try {
             http := ComObject("WinHttp.WinHttpRequest.5.1")
             http.Open("GET", clickerScriptURL, false)
@@ -91,22 +90,35 @@ LaunchScript(panel) {
 }
 
 ActivateKey(key, panel) {
+    global hwidFile, thisHWID, validKeysURL
     key := Trim(key)
     if key = "" {
         MsgBox "Введите ключ!"
         return
     }
 
-    validLines := StrSplit(FileRead(keysFile), "`n")
-    updatedLines := []
+    try {
+        http := ComObject("WinHttp.WinHttpRequest.5.1")
+        http.Open("GET", validKeysURL, false)
+        http.Send()
+        if (http.Status != 200) {
+            MsgBox "❌ Ошибка загрузки ключей! Код: " http.Status
+            return
+        }
+        keysText := http.ResponseText
+    } catch {
+        MsgBox "❌ Ошибка при загрузке файла с ключами!"
+        return
+    }
+
+    validLines := StrSplit(keysText, "`n")
     found := false
+
     for line in validLines {
         parts := StrSplit(line, "|")
         if parts.Length >= 2 && Trim(parts[1]) = key && Trim(parts[2]) = "unused" {
             found := true
-            updatedLines.Push(parts[1] "|" thisHWID)
-        } else {
-            updatedLines.Push(line)
+            break
         }
     }
 
@@ -115,8 +127,6 @@ ActivateKey(key, panel) {
         return
     }
 
-    FileDelete(keysFile)
-    FileAppend(JoinLines(updatedLines), keysFile)
     FileAppend(thisHWID "`n", hwidFile)
     MsgBox "✅ Ключ активирован."
     panel.Destroy()
@@ -168,61 +178,12 @@ LoadSettings() {
     }
 }
 
-; === Авторизация по ключу и HWID ===
-CheckLicense() {
-    global keysFile, hwidFile, thisHWID
-
-    if FileExist(hwidFile) {
-        if InStr(FileRead(hwidFile), thisHWID) {
-            return true ; уже активировано
-        }
-    }
-
-    if !FileExist(keysFile) {
-        MsgBox "❌ Файл с ключами не найден: " keysFile
-        ExitApp()
-    }
-
-    validLines := StrSplit(FileRead(keysFile), "`n")
-    result := InputBox("Введите ключ доступа:", "Авторизация")
-    if result.Result != "OK" || result.Value = "" {
-        MsgBox "⛔ Ключ не введён. Скрипт завершён."
-        ExitApp()
-    }
-    key := Trim(result.Value)
-
-    updatedLines := []
-    found := false
-    for line in validLines {
-        parts := StrSplit(line, "|")
-        if parts.Length >= 2 && Trim(parts[1]) = key && Trim(parts[2]) = "unused" {
-            found := true
-            updatedLines.Push(parts[1] "|" thisHWID)
-        } else {
-            updatedLines.Push(line)
-        }
-    }
-
-    if !found {
-        MsgBox "🚫 Неверный или уже использованный ключ!"
-        ExitApp()
-    }
-
-    FileDelete(keysFile)
-    FileAppend(JoinLines(updatedLines), keysFile)
-    FileAppend(thisHWID "`n", hwidFile)
-}
-
 GetHWID() {
     RunWait("cmd /c wmic csproduct get uuid > hwid.tmp", , "Hide")
     hwid := Trim(FileRead("hwid.tmp"))
     FileDelete("hwid.tmp")
     hwid := StrReplace(hwid, "UUID", "")
     return Trim(hwid)
-}
-
-StartScript() {
-    MsgBox "✅ Скрипт запущен. Здесь должен быть основной код кликера."
 }
 
 ; === Главный запуск ===
